@@ -1,6 +1,6 @@
 # ResumeAI — AI-Powered Resume Customizer
 
-A full-stack web app that tailors your resume to a specific job description using Gemini AI.
+A full-stack web app that tailors your resume to a specific job description using an LLM — rewriting your summary, highlighting matching skills, rephrasing experience bullets, and generating a match score, ATS score, and cover letter.
 
 ## Live Demo
 
@@ -15,16 +15,17 @@ A full-stack web app that tailors your resume to a specific job description usin
 |----------|-------------------------------------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend  | Python, FastAPI, Uvicorn            |
-| LLM      | Google Gemini 1.5 Flash (via `google-generativeai`) |
+| LLM      | Groq — Llama 3.3 70B Versatile (via `groq` Python SDK) |
 | Hosting  | Vercel (frontend), Render (backend) |
 
 ---
 
 ## LLM Details
 
-- **Provider:** Google AI Studio (free tier)
-- **Model:** `gemini-1.5-flash`
-- **Why:** Free API key, generous rate limits, strong instruction-following
+- **Provider:** [Groq](https://console.groq.com) (free tier)
+- **Model:** `llama-3.3-70b-versatile`
+- **Why:** Free API key, very fast inference (~2-5s responses), generous rate limits (30 RPM on free tier), strong JSON-mode output for structured responses
+- **Output format:** Single LLM call returns structured JSON containing the tailored resume, match score, ATS score breakdown, missing keywords, and a generated cover letter
 
 ---
 
@@ -35,7 +36,9 @@ A full-stack web app that tailors your resume to a specific job description usin
 │        Next.js Frontend          │
 │  - JD textarea (validated)       │
 │  - PDF/DOCX file upload          │
-│  - Result panel + download       │
+│  - Tabbed result panel:          │
+│    Resume / Scores / Cover Letter│
+│  - Download as PDF / TXT         │
 └────────────┬─────────────────────┘
              │ POST /api/customize (multipart/form-data)
 ┌────────────▼─────────────────────┐
@@ -43,14 +46,32 @@ A full-stack web app that tailors your resume to a specific job description usin
 │  - File validation & parsing     │
 │  - pdfplumber / python-docx      │
 │  - Prompt engineering            │
-│  - Gemini API call               │
-│  - JSON response formatting      │
+│  - Groq API call (JSON mode)     │
+│  - Retry logic on rate limits    │
+│  - Response validation           │
 └────────────┬─────────────────────┘
              │ REST
 ┌────────────▼─────────────────────┐
-│       Gemini 1.5 Flash           │
+│   Groq — Llama 3.3 70B Versatile │
 └──────────────────────────────────┘
 ```
+
+---
+
+## Features
+
+### Core
+- ✅ Paste job description with validation (min 50 characters)
+- ✅ Upload PDF or DOCX resume (max 5MB), with drag-and-drop
+- ✅ AI rewrites summary, highlights matching skills, rephrases experience bullets
+- ✅ Shows missing keywords to consider adding
+- ✅ Download tailored resume as PDF or plain text
+- ✅ Error handling for invalid files, API failures, empty inputs, rate limits
+
+### Bonus
+- ✅ **Match Score** — 0-100 score with explanation of how well the tailored resume aligns with the JD
+- ✅ **ATS Score** — 0-100 score with a 5-dimension breakdown (keyword density, standard headings, date formatting, quantified achievements, formatting complexity) plus actionable tips
+- ✅ **Cover Letter Generator** — personalized 3-4 paragraph cover letter, copyable and downloadable
 
 ---
 
@@ -60,7 +81,7 @@ A full-stack web app that tailors your resume to a specific job description usin
 
 - Node.js 18+
 - Python 3.10+
-- A Gemini API key → [Get one free at Google AI Studio](https://aistudio.google.com/app/apikey)
+- A Groq API key → [Get one free at console.groq.com/keys](https://console.groq.com/keys)
 
 ### Backend
 
@@ -71,7 +92,7 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Edit .env and add your GROQ_API_KEY
 
 uvicorn main:app --reload --port 8000
 ```
@@ -104,7 +125,7 @@ Frontend runs at `http://localhost:3000`.
 4. Build command: `pip install -r requirements.txt`
 5. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 6. Add environment variables:
-   - `GEMINI_API_KEY` = your key
+   - `GROQ_API_KEY` = your key
    - `ALLOWED_ORIGINS` = `https://your-app.vercel.app`
 
 ### Frontend → Vercel
@@ -117,23 +138,13 @@ Frontend runs at `http://localhost:3000`.
 
 ---
 
-## Features
-
-- ✅ Paste job description with validation
-- ✅ Upload PDF or DOCX resume (max 5MB)
-- ✅ AI rewrites summary, highlights matching skills, rephrases experience bullets
-- ✅ Shows missing keywords to consider adding
-- ✅ Download tailored resume as PDF or plain text
-- ✅ Error handling for invalid files, API failures, empty inputs
-
----
-
 ## Known Limitations
 
 - Scanned (image-only) PDFs cannot be parsed — text must be selectable
 - LLM occasionally returns generic bullets if the original resume is very sparse
-- Gemini free tier has rate limits (~15 RPM) — fine for demo/interview use
-- No persistent storage — results are session-only
+- Groq free tier has rate limits (~30 RPM) — backend retries automatically with exponential backoff, but heavy concurrent use may still hit limits
+- No persistent storage — results are session-only, not saved between visits
+- Render free tier spins down after inactivity; first request after idle may take ~30s
 
 ---
 
@@ -143,24 +154,24 @@ Frontend runs at `http://localhost:3000`.
 resume-customizer/
 ├── backend/
 │   ├── main.py          # FastAPI app, routes, validation
-│   ├── parser.py        # PDF + DOCX text extraction
-│   ├── llm.py           # Gemini integration + prompt
+│   ├── parser.py         # PDF + DOCX text extraction
+│   ├── llm.py            # Groq integration + prompt engineering
 │   ├── requirements.txt
-│   ├── render.yaml      # Render deployment config
+│   ├── render.yaml       # Render deployment config
 │   └── .env.example
 └── frontend/
     ├── app/
     │   ├── layout.tsx
-    │   ├── page.tsx     # Main page
+    │   ├── page.tsx       # Main page
     │   └── globals.css
     ├── components/
     │   ├── FileUpload.tsx
-    │   ├── ResultPanel.tsx
+    │   ├── ResultPanel.tsx  # Tabbed results: Resume / Scores / Cover Letter
     │   └── Spinner.tsx
     ├── lib/
-    │   ├── api.ts       # API client
-    │   ├── download.ts  # PDF + text download
-    │   ├── types.ts     # TypeScript types
+    │   ├── api.ts         # API client
+    │   ├── download.ts    # PDF + text download
+    │   ├── types.ts        # TypeScript types
     │   └── utils.ts
     └── .env.example
 ```

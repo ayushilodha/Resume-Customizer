@@ -4,7 +4,7 @@ A full-stack web app that tailors your resume to a specific job description usin
 
 ## Live Demo
 
-- **Frontend:** https://resume-customizer-blhn6v3x6-ayushi-lodhas-projects.vercel.app
+- **Frontend:** https://resume-customizer-snowy.vercel.app/
 - **Backend:** https://resume-customizer-z84m.onrender.com
 
 ---
